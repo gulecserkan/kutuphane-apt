@@ -112,6 +112,24 @@ exit 0
 EOF
 chmod 755 "${CONTROL_DIR}/postinst"
 
+cat > "${CONTROL_DIR}/postrm" <<'EOF'
+#!/bin/sh
+set -e
+APP_ROOT="/opt/kutuphane-server"
+ENV_DIR="/etc/kutuphane"
+
+case "$1" in
+  remove|purge)
+    rm -rf "${APP_ROOT}"
+    if [ "$1" = "purge" ]; then
+      rm -rf "${ENV_DIR}"
+    fi
+    ;;
+esac
+exit 0
+EOF
+chmod 755 "${CONTROL_DIR}/postrm"
+
 echo "Paketleniyor..."
 dpkg-deb --build "${BUILD_DIR}" "${DIST_DIR}/${APP_NAME}_${VERSION}.deb"
 echo "Oluşturuldu: ${DIST_DIR}/${APP_NAME}_${VERSION}.deb"
