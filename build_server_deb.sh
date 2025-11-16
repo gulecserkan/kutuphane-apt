@@ -37,7 +37,7 @@ Section: web
 Priority: optional
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
-Depends: python3, python3-django, python3-psycopg2, python3-requests
+Depends: python3, python3-django, python3-djangorestframework, python3-psycopg2, python3-requests
 Description: Okul kütüphanesi sunucu uygulaması
 EOF
 

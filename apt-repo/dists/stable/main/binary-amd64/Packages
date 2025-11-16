@@ -16,12 +16,12 @@ Package: kutuphane-server
 Version: 1.0.0
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
-Depends: python3, python3-django, python3-psycopg2, python3-requests
+Depends: python3, python3-django, python3-djangorestframework, python3-psycopg2, python3-requests
 Filename: pool/main/kutuphane-server_1.0.0.deb
-Size: 63596
-MD5sum: 16548441cfe45f857fb05411cd3360d9
-SHA1: f26864d7457ecd3688273af59b68d3353cedad53
-SHA256: b7443b8513673398a84e95cc2e57b2ca8ea0e60c36daccdf718ef445e3506831
+Size: 63548
+MD5sum: 6824132d214c98bbd56478e739e572cf
+SHA1: 7e1c62e79f3805699b30c482cd73d656b66f0ac1
+SHA256: f0f0e6d6e80f6eac1cd956d7e3d2839ade988bfdf0b4493b37d207491de68396
 Section: web
 Priority: optional
 Description: Okul kütüphanesi sunucu uygulaması
