@@ -60,19 +60,12 @@ run_repo() {
 }
 
 run_push() {
-  remote_def=$(get_default GIT_REMOTE || echo "")
-  user_def=$(get_default GIT_USER || echo "")
-  token_def=$(get_default GIT_PAT || echo "")
+  remote=$(get_default GIT_REMOTE || git remote get-url origin 2>/dev/null || echo "")
+  user=$(get_default GIT_USER || echo "")
+  token=$(get_default GIT_PAT || echo "")
   msg_def=$(get_default GIT_MSG || echo "Update packages")
-
-  remote=$(ask "Remote URL" "$remote_def")
-  user=$(ask "Git kullanıcı" "$user_def")
-  token=$(ask "PAT (boş bırakırsan mevcut auth kullanılır)" "$token_def")
   msg=$(ask "Commit mesajı" "$msg_def")
 
-  set_default GIT_REMOTE "$remote"
-  set_default GIT_USER "$user"
-  set_default GIT_PAT "$token"
   set_default GIT_MSG "$msg"
 
   [ -n "$remote" ] && git remote set-url origin "$remote" || true
