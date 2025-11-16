@@ -1,0 +1,8 @@
+# Lokal varsayılanlar (kimlik bilgileri içerebilir)
+defaults.txt
+
+# Build çıktıları
+.build/
+dist/
+
+ 
