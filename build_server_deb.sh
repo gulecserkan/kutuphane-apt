@@ -160,19 +160,14 @@ if command -v psql >/dev/null 2>&1; then
     elif id postgres >/dev/null 2>&1; then
       PSQL_CMD="su - postgres -c psql"
     fi
-    ${PSQL_CMD} -v ON_ERROR_STOP=1 <<SQL || echo "Uyarı: DB/rol oluşturulamadı, elle kontrol edin."
-DO \$\$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${DB_USER}') THEN
-    EXECUTE format('CREATE ROLE "%s" LOGIN PASSWORD ''%s''', '${DB_USER}', '${esc_pw}');
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_database WHERE datname='${DB_NAME}') THEN
-    EXECUTE format('CREATE DATABASE "%s" OWNER "%s"', '${DB_NAME}', '${DB_USER}');
-  END IF;
-END
-\$\$;
-GRANT ALL PRIVILEGES ON DATABASE "${DB_NAME}" TO "${DB_USER}";
-SQL
+    # rol oluştur (yoksa)
+    ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" >/dev/null 2>&1 || \
+      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || echo "Uyarı: rol oluşturulamadı."
+    # veritabanı oluştur (yoksa)
+    if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" >/dev/null 2>&1; then
+      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || echo "Uyarı: veritabanı oluşturulamadı."
+    fi
+    ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_NAME}\" TO \"${DB_USER}\"" || echo "Uyarı: yetki verilemedi."
   elif [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; then
     echo "Uyarı: PostgreSQL servisi çalışmıyor, DB/rol oluşturma atlandı."
   fi
