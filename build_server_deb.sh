@@ -50,6 +50,7 @@ ENV_FILE="${ENV_DIR}/.env"
 VENV_DIR="${APP_ROOT}/venv"
 REQ_FILE="${APP_ROOT}/requirements.txt"
 SUMMARY_FILE="${APP_ROOT}/INSTALL_SUMMARY.txt"
+DEBUG_LOG="${APP_ROOT}/install_debug.log"
 PYTHON="${VENV_DIR}/bin/python"
 PIP="${PYTHON} -m pip"
 
@@ -61,6 +62,12 @@ ask() {
   else
     echo "${def}"
   fi
+}
+
+debug_step() {
+  step="$1"
+  mkdir -p "$(dirname "${DEBUG_LOG}")" 2>/dev/null || true
+  echo "DEBUG_STEP: ${step}" | tee -a "${DEBUG_LOG}" || true
 }
 
 ensure_pg_running() {
@@ -75,6 +82,7 @@ ensure_pg_running() {
 }
 
 mkdir -p "${ENV_DIR}"
+debug_step "start"
 # .env yoksa varsayılan bir tane oluştur
 if [ ! -f "${ENV_FILE}" ]; then
   SECRET_KEY=$(python3 - <<'PY'
@@ -116,6 +124,7 @@ SAMPLE
   chmod 640 "${ENV_FILE}"
   echo ".env oluşturuldu (${ENV_FILE}). DB bilgilerini ve parolaları güncelleyin."
 fi
+debug_step "env_ready"
 
 # .env'yi içe al
 set +e
@@ -138,6 +147,7 @@ if [ -x "${VENV_DIR}/bin/pip" ]; then
 else
   echo "Uyarı: pip bulunamadı (${VENV_DIR}/bin/pip)."
 fi
+debug_step "pip_done"
 
 # PostgreSQL DB/rol oluştur (opsiyonel)
 if command -v psql >/dev/null 2>&1; then
@@ -160,18 +170,23 @@ if command -v psql >/dev/null 2>&1; then
     elif id postgres >/dev/null 2>&1; then
       PSQL_CMD="su - postgres -c psql"
     fi
-    create_db_ok=1
-    # rol oluştur (yoksa)
-    ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" >/dev/null 2>&1 || \
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || echo "Uyarı: rol oluşturulamadı."
-    # veritabanı oluştur (yoksa)
-    if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" >/dev/null 2>&1; then
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || create_db_ok=0
-    fi
-    if [ "${create_db_ok}" -eq 1 ]; then
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_NAME}\" TO \"${DB_USER}\"" || echo "Uyarı: yetki verilemedi."
+    # psql erişimi yoksa atla
+    if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -c '\q' >/dev/null 2>&1; then
+      echo "Uyarı: postgres yetkisi yok veya psql bağlantısı kurulamadı, DB/rol oluşturma atlandı."
     else
-      echo "Uyarı: veritabanı oluşturulamadı, yetki verme atlandı. psql ile elle kontrol edin."
+      create_db_ok=1
+      # rol oluştur (yoksa)
+      ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" >/dev/null 2>&1 || \
+        ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || echo "Uyarı: rol oluşturulamadı."
+      # veritabanı oluştur (yoksa)
+      if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" >/dev/null 2>&1; then
+        ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || create_db_ok=0
+      fi
+      if [ "${create_db_ok}" -eq 1 ]; then
+        ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_NAME}\" TO \"${DB_USER}\"" || echo "Uyarı: yetki verilemedi."
+      else
+        echo "Uyarı: veritabanı oluşturulamadı, yetki verme atlandı. psql ile elle kontrol edin."
+      fi
     fi
   elif [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; then
     echo "Uyarı: PostgreSQL servisi çalışmıyor, DB/rol oluşturma atlandı."
@@ -179,6 +194,7 @@ if command -v psql >/dev/null 2>&1; then
 else
   echo "Uyarı: psql bulunamadı, DB/rol otomatik oluşturulmadı."
 fi
+debug_step "db_done"
 
 # migrate
 if [ -f "${APP_ROOT}/manage.py" ]; then
@@ -193,12 +209,14 @@ if [ -f "${APP_ROOT}/manage.py" ]; then
     echo "Not: non-interaktif ortam, createsuperuser atlandı. İhtiyaç varsa manuel çalıştırın."
   fi
 fi
+debug_step "django_done"
 
 # service/cron
 if [ -x "${APP_ROOT}/setup_backend_service.sh" ]; then
   echo "Systemd/cron kurulumu deneniyor..."
   "${APP_ROOT}/setup_backend_service.sh" || echo "setup_backend_service.sh çalıştırılamadı, manuel kurulum yapın."
 fi
+debug_step "service_done"
 cat > "${SUMMARY_FILE}" <<SUM
 Kutuphane Server Kurulum Özeti
 -----------------------------
