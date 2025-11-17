@@ -37,7 +37,7 @@ Section: web
 Priority: optional
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
-Depends: python3, python3-django, python3-djangorestframework, python3-djangorestframework-simplejwt, python3-psycopg2, python3-requests
+Depends: python3, python3-venv, python3-pip, postgresql-client
 Description: Okul kütüphanesi sunucu uygulaması
 EOF
 
@@ -47,6 +47,21 @@ set -e
 APP_ROOT="/opt/kutuphane-server"
 ENV_DIR="/etc/kutuphane"
 ENV_FILE="${ENV_DIR}/.env"
+VENV_DIR="${APP_ROOT}/venv"
+REQ_FILE="${APP_ROOT}/requirements.txt"
+SUMMARY_FILE="${APP_ROOT}/INSTALL_SUMMARY.txt"
+PYTHON="${VENV_DIR}/bin/python"
+PIP="${PYTHON} -m pip"
+
+ask() {
+  prompt="$1"; def="$2"
+  if [ -t 0 ]; then
+    read -rp "${prompt} [${def}]: " ans
+    echo "${ans:-$def}"
+  else
+    echo "${def}"
+  fi
+}
 
 mkdir -p "${ENV_DIR}"
 # .env yoksa varsayılan bir tane oluştur
@@ -56,18 +71,36 @@ import secrets
 print(secrets.token_urlsafe(48))
 PY
   )
+  DB_NAME_DEF="kutuphane"
+  DB_USER_DEF="kutuphane"
+  DB_PASS_DEF="degistirin"
+  DB_HOST_DEF="localhost"
+  DB_PORT_DEF="5432"
+  SU_USER_DEF="admin"
+  SU_EMAIL_DEF="admin@example.com"
+  SU_PASS_DEF="degistirin"
+
+  DB_NAME=$(ask "DB adı" "$DB_NAME_DEF")
+  DB_USER=$(ask "DB kullanıcı" "$DB_USER_DEF")
+  DB_PASSWORD=$(ask "DB şifre" "$DB_PASS_DEF")
+  DB_HOST=$(ask "DB host" "$DB_HOST_DEF")
+  DB_PORT=$(ask "DB port" "$DB_PORT_DEF")
+  DJANGO_SUPERUSER_USERNAME=$(ask "Admin kullanıcı" "$SU_USER_DEF")
+  DJANGO_SUPERUSER_EMAIL=$(ask "Admin email" "$SU_EMAIL_DEF")
+  DJANGO_SUPERUSER_PASSWORD=$(ask "Admin şifre" "$SU_PASS_DEF")
+
   cat > "${ENV_FILE}" <<SAMPLE
 SECRET_KEY=${SECRET_KEY}
 DEBUG=False
 ALLOWED_HOSTS=127.0.0.1,localhost
-DB_NAME=kutuphane
-DB_USER=kutuphane
-DB_PASSWORD=degistirin
-DB_HOST=localhost
-DB_PORT=5432
-DJANGO_SUPERUSER_USERNAME=admin
-DJANGO_SUPERUSER_EMAIL=admin@example.com
-DJANGO_SUPERUSER_PASSWORD=degistirin
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
+DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
+DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
 SAMPLE
   chmod 640 "${ENV_FILE}"
   echo ".env oluşturuldu (${ENV_FILE}). DB bilgilerini ve parolaları güncelleyin."
@@ -80,24 +113,67 @@ set -a
 set +a
 set -e
 
+# venv + pip bağımlılık kurulumu
+if [ ! -d "${VENV_DIR}" ]; then
+  python3 -m venv "${VENV_DIR}" || echo "Uyarı: venv oluşturulamadı (${VENV_DIR}). python3-venv var mı kontrol edin."
+fi
+if [ -x "${VENV_DIR}/bin/pip" ]; then
+  ${PIP} install --upgrade pip wheel setuptools || echo "Uyarı: pip yükseltilemedi."
+  if [ -f "${REQ_FILE}" ]; then
+    ${PIP} install --no-cache-dir -r "${REQ_FILE}" || echo "Uyarı: requirements.txt kurulamadı."
+  else
+    echo "Uyarı: requirements.txt bulunamadı, pip kurulumu atlandı."
+  fi
+else
+  echo "Uyarı: pip bulunamadı (${VENV_DIR}/bin/pip)."
+fi
+
+# PostgreSQL DB/rol oluştur (opsiyonel)
+if command -v psql >/dev/null 2>&1; then
+  if [ -t 0 ]; then
+    create_db_ans=$(ask "PostgreSQL DB ve kullanıcı oluşturulsun mu? (psql erişimi gerekir)" "h")
+  else
+    create_db_ans="h"
+  fi
+  if [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; then
+    # Şifre içinde tek tırnakları kaç
+    esc_pw=$(printf "%s" "${DB_PASSWORD}" | sed "s/'/''/g")
+    PSQL_CMD="psql"
+    if command -v sudo >/dev/null 2>&1 && sudo -u postgres true 2>/dev/null; then
+      PSQL_CMD="sudo -u postgres psql"
+    elif id postgres >/dev/null 2>&1; then
+      PSQL_CMD="su - postgres -c psql"
+    fi
+    ${PSQL_CMD} -v ON_ERROR_STOP=1 <<SQL || echo "Uyarı: DB/rol oluşturulamadı, elle kontrol edin."
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${DB_USER}') THEN
+    EXECUTE format('CREATE ROLE "%s" LOGIN PASSWORD ''%s''', '${DB_USER}', '${esc_pw}');
+  END IF;
+  IF NOT EXISTS (SELECT FROM pg_database WHERE datname='${DB_NAME}') THEN
+    EXECUTE format('CREATE DATABASE "%s" OWNER "%s"', '${DB_NAME}', '${DB_USER}');
+  END IF;
+END
+\$\$;
+GRANT ALL PRIVILEGES ON DATABASE "${DB_NAME}" TO "${DB_USER}";
+SQL
+  fi
+else
+  echo "Uyarı: psql bulunamadı, DB/rol otomatik oluşturulmadı."
+fi
+
 # migrate
 if [ -f "${APP_ROOT}/manage.py" ]; then
-  (cd "${APP_ROOT}" && python3 manage.py migrate --noinput) || echo "Uyarı: migrate çalıştırılamadı, DB bilgilerini kontrol edin."
-  # superuser oluştur (yoksa)
-  (cd "${APP_ROOT}" && python3 manage.py shell <<'PY' || true
-import os
-from django.contrib.auth import get_user_model
-User = get_user_model()
-username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "admin")
-email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "admin@example.com")
-password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "admin")
-if not User.objects.filter(username=username).exists():
-    User.objects.create_superuser(username=username, email=email, password=password)
-    print("Superuser oluşturuldu:", username)
-else:
-    print("Superuser zaten mevcut:", username)
-PY
-  )
+  PY_CMD="${PYTHON}"
+  [ -x "${PYTHON}" ] || PY_CMD="python3"
+  (cd "${APP_ROOT}" && ${PY_CMD} manage.py migrate --noinput) || echo "Uyarı: migrate çalıştırılamadı, DB bilgilerini kontrol edin."
+  # superuser oluştur (interaktif)
+  if [ -t 0 ]; then
+    echo "Süper kullanıcı oluşturma başlatılıyor (mevcutsa atlanır)."
+    (cd "${APP_ROOT}" && DJANGO_SUPERUSER_PASSWORD= ${PY_CMD} manage.py createsuperuser) || echo "Uyarı: createsuperuser çalıştırılamadı."
+  else
+    echo "Not: non-interaktif ortam, createsuperuser atlandı. İhtiyaç varsa manuel çalıştırın."
+  fi
 fi
 
 # service/cron
@@ -105,6 +181,22 @@ if [ -x "${APP_ROOT}/setup_backend_service.sh" ]; then
   echo "Systemd/cron kurulumu deneniyor..."
   "${APP_ROOT}/setup_backend_service.sh" || echo "setup_backend_service.sh çalıştırılamadı, manuel kurulum yapın."
 fi
+cat > "${SUMMARY_FILE}" <<SUM
+Kutuphane Server Kurulum Özeti
+-----------------------------
+- Kurulum dizini: ${APP_ROOT}
+- Sanal ortam: ${VENV_DIR}
+- Ortam değişkenleri: ${ENV_FILE} (DB bilgileri, SECRET_KEY vb. burada; gerekirse düzenleyin)
+- Gereksinimler: ${REQ_FILE} (pip ile kuruldu)
+- Migrasyon: (cd ${APP_ROOT} && ${PY_CMD} manage.py migrate --noinput)
+- Süper kullanıcı: (cd ${APP_ROOT} && ${PY_CMD} manage.py createsuperuser)
+- Servis kurulumu: ${APP_ROOT}/setup_backend_service.sh (otomatikkurulum denendi, sorun varsa manuel çalıştırın)
+- Kaldırma: sudo apt remove kutuphane-server (purge = config dosyalarıyla birlikte)
+# Daha fazla bilgi: ${APP_ROOT}/SERVER_SETUP.md
+SUM
+echo "Kurulum özeti kaydedildi: ${SUMMARY_FILE}"
+echo "Özet içeriği:"
+cat "${SUMMARY_FILE}"
 echo "Kurulum tamamlandı."
 echo "• Yapılandırma için .env dosyasını düzenleyin: ${ENV_FILE}"
 echo "• Detaylı yönergeler: ${APP_ROOT}/SERVER_SETUP.md (ve django_deployment_checklist.md)"

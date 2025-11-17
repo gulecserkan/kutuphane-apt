@@ -34,7 +34,7 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
-Depends: python3, python3-pyqt5, python3-requests
+Depends: python3, python3-venv, python3-pip, python3-pyqt5
 Description: Okul kütüphanesi masaüstü istemcisi
 EOF
 
@@ -42,6 +42,42 @@ cat > "${CONTROL_DIR}/postinst" <<'EOF'
 #!/bin/sh
 set -e
 /opt/kutuphane-desktop/install_desktop_entry.sh || true
+
+APP_ROOT="/opt/kutuphane-desktop"
+VENV_DIR="${APP_ROOT}/venv"
+SUMMARY_FILE="${APP_ROOT}/INSTALL_SUMMARY.txt"
+REQ_FALLBACK="${APP_ROOT}/requirements.txt"
+
+if [ ! -d "${VENV_DIR}" ]; then
+  python3 -m venv "${VENV_DIR}" || echo "Uyarı: venv oluşturulamadı (${VENV_DIR})."
+fi
+if [ -x "${VENV_DIR}/bin/pip" ]; then
+  "${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools || echo "Uyarı: pip yükseltilemedi."
+  if [ -f "${REQ_FALLBACK}" ]; then
+    "${VENV_DIR}/bin/pip" install --no-cache-dir -r "${REQ_FALLBACK}" || echo "Uyarı: requirements.txt kurulamadı."
+  else
+    echo "Uyarı: requirements.txt bulunamadı, pip kurulumu atlandı."
+  fi
+else
+  echo "Uyarı: pip bulunamadı (${VENV_DIR}/bin/pip)."
+fi
+
+PY_CMD="${VENV_DIR}/bin/python"
+[ -x "${PY_CMD}" ] || PY_CMD="python3"
+
+cat > "${SUMMARY_FILE}" <<SUM
+Kutuphane Desktop Kurulum Özeti
+-------------------------------
+- Kurulum dizini: ${APP_ROOT}
+- Sanal ortam: ${VENV_DIR}
+- Gereksinimler: ${REQ_FALLBACK} (pip ile kurulduysa)
+- Çalıştırma: uygulama menüsündeki kısayol veya (cd ${APP_ROOT} && ${PY_CMD} main.py)
+- Kaldırma: sudo apt remove kutuphane-desktop (purge = config dosyalarıyla birlikte)
+SUM
+echo "Kurulum özeti kaydedildi: ${SUMMARY_FILE}"
+echo "Özet içeriği:"
+cat "${SUMMARY_FILE}"
+
 exit 0
 EOF
 chmod 755 "${CONTROL_DIR}/postinst"
