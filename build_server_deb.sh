@@ -37,7 +37,7 @@ Section: web
 Priority: optional
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
-Depends: python3, python3-venv, python3-pip, postgresql-client
+Depends: python3, python3-venv, python3-pip, postgresql, postgresql-client
 Description: Okul kütüphanesi sunucu uygulaması
 EOF
 
@@ -61,6 +61,17 @@ ask() {
   else
     echo "${def}"
   fi
+}
+
+ensure_pg_running() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl is-active --quiet postgresql || systemctl start postgresql || return 1
+  elif command -v service >/dev/null 2>&1; then
+    service postgresql status >/dev/null 2>&1 || service postgresql start || return 1
+  else
+    return 1
+  fi
+  return 0
 }
 
 mkdir -p "${ENV_DIR}"
@@ -130,12 +141,17 @@ fi
 
 # PostgreSQL DB/rol oluştur (opsiyonel)
 if command -v psql >/dev/null 2>&1; then
+  pg_started=1
+  ensure_pg_running || pg_started=0
+  if [ "${pg_started}" -eq 0 ]; then
+    echo "Uyarı: PostgreSQL servisi başlatılamadı, DB/rol oluşturma atlanacak."
+  fi
   if [ -t 0 ]; then
-    create_db_ans=$(ask "PostgreSQL DB ve kullanıcı oluşturulsun mu? (psql erişimi gerekir)" "h")
+    create_db_ans=$(ask "PostgreSQL DB ve kullanıcı oluşturulsun mu? (psql ve çalışan PostgreSQL gerekir)" "h")
   else
     create_db_ans="h"
   fi
-  if [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; then
+  if [ "${pg_started}" -eq 1 ] && { [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; }; then
     # Şifre içinde tek tırnakları kaç
     esc_pw=$(printf "%s" "${DB_PASSWORD}" | sed "s/'/''/g")
     PSQL_CMD="psql"
@@ -157,6 +173,8 @@ END
 \$\$;
 GRANT ALL PRIVILEGES ON DATABASE "${DB_NAME}" TO "${DB_USER}";
 SQL
+  elif [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; then
+    echo "Uyarı: PostgreSQL servisi çalışmıyor, DB/rol oluşturma atlandı."
   fi
 else
   echo "Uyarı: psql bulunamadı, DB/rol otomatik oluşturulmadı."
