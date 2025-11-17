@@ -13,15 +13,15 @@ Priority: optional
 Description: Okul kütüphanesi masaüstü istemcisi
 
 Package: kutuphane-server
-Version: 1.0.8
+Version: 1.0.9
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
 Depends: python3, python3-venv, python3-pip, postgresql, postgresql-client
-Filename: pool/main/kutuphane-server_1.0.8.deb
-Size: 65272
-MD5sum: 52bc12669981cdf1d368db72e22ab2e0
-SHA1: 67eca97ee36d33ba0e642666769229130ce943ae
-SHA256: 749c28f73983355e70917b2d2bac362eb0f5962df90e4e8fdc4943b1d505b2e9
+Filename: pool/main/kutuphane-server_1.0.9.deb
+Size: 65284
+MD5sum: 1bd6c0c49915cd61e83790725dff61e6
+SHA1: f4b71c959db2507b892bc3f9139727ecf7453681
+SHA256: 91498d731d2de77122bf2d940ac8aa0e271e49e1b8e72109b4ac028988020b0c
 Section: web
 Priority: optional
 Description: Okul kütüphanesi sunucu uygulaması
