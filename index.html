@@ -1,12 +1,119 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>My Project Page</title>
+  <title>Kütüphane Programı</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="stil.css">
 </head>
 <body>
-  <h1>Hoş geldiniz</h1>
-  <p>Bu repo GitHub Pages ile yayınlanmaktadır.</p>
+
+  <div class="card">
+    <div class="inner">
+
+      <div class="badge">
+        <span class="badge-dot"></span>
+        Kütüphane Programı • APT Deposu
+      </div>
+
+      <h1>Kütüphane Programı Reposu</h1>
+      <p class="subtitle">
+        Bu sayfa, <span class="mono-inline">kutuphane-server</span> ve
+        <span class="mono-inline">kutuphane-desktop</span> paketlerinin APT üzerinden kurulumu için hazırlanmıştır.
+      </p>
+
+      <div class="layout">
+
+        <!-- SOL TARAF -->
+        <section>
+          <h2><span class="icon">📚</span> Program Bileşenleri</h2>
+          <p>Proje iki ana bileşenden oluşur:</p>
+          <ul>
+            <li><strong>kutuphane-server</strong> — Sunucu / backend uygulaması</li>
+            <li><strong>kutuphane-desktop</strong> — Masaüstü istemci uygulaması</li>
+          </ul>
+
+          <div class="pill-list">
+            <span class="pill">Debian / Ubuntu tabanlı sistemler</span>
+            <span class="pill">APT repo ile güncelleme</span>
+            <span class="pill">Sunucu + Masaüstü entegrasyonu</span>
+          </div>
+
+          <h2><span class="icon">⚙️</span> Genel Bilgi</h2>
+          <p>
+            Aşağıdaki adımları tamamladıktan sonra sisteminiz, bu depoya eklenen
+            yeni sürümleri <strong>otomatik olarak güncellemeler</strong> ile alacaktır.
+          </p>
+        </section>
+
+        <!-- SAĞ TARAF -->
+        <section>
+          <h2><span class="icon">🧩</span> Kurulum Adımları</h2>
+
+          <ol class="steps">
+            <li>
+              <strong>APT kaynak dosyasını oluşturun:</strong>
+              <div class="code-block">
+                <div class="code-title">
+                  <span class="code-title-dot"></span> Terminal
+                </div>
+                <code>sudo nano /etc/apt/sources.list.d/kutuphane.list</code>
+              </div>
+
+              <p style="margin-top: 6px; font-size: 13px;">
+                Dosyanın içine şu satırı ekleyin, ardından
+                <span class="mono-inline">Ctrl + S</span> → <span class="mono-inline">Ctrl + X</span> ile kaydedip çıkın.
+              </p>
+
+              <div class="code-block">
+                <div class="code-title">
+                  <span class="code-title-dot"></span> APT Kaynağı
+                </div>
+                <code>https://gulecserkan.github.io/kutuphane-apt/apt-repo stable main</code>
+              </div>
+            </li>
+
+            <li>
+              <strong>Paket listesini güncelleyin:</strong>
+              <div class="code-block">
+                <div class="code-title">
+                  <span class="code-title-dot"></span> Terminal
+                </div>
+                <code>sudo apt update</code>
+              </div>
+            </li>
+
+            <li>
+              <strong>Paketleri kurun:</strong>
+              <div class="code-block">
+                <div class="code-title">
+                  <span class="code-title-dot"></span> Terminal
+                </div>
+                <code>sudo apt install kutuphane-server
+sudo apt install kutuphane-desktop</code>
+              </div>
+            </li>
+          </ol>
+
+          <p class="muted-note">
+            Depoya yeni sürümler eklendikçe, sisteminiz bu paketler için güncellemeleri
+            standart <span class="mono-inline">apt upgrade</span> ile otomatik alır.
+          </p>
+
+        </section>
+      </div>
+
+      <div class="footer">
+        <span><span class="dot"></span> Kütüphane Programı • APT Deposu</span>
+        <span>
+          Kaynak repo:
+          <a href="https://github.com/gulecserkan" target="_blank">GitHub / gulecserkan</a>
+        </span>
+      </div>
+
+    </div>
+  </div>
+
 </body>
 </html>
 
