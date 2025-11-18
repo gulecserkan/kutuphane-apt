@@ -53,6 +53,7 @@ SUMMARY_FILE="${APP_ROOT}/INSTALL_SUMMARY.txt"
 DEBUG_LOG="${APP_ROOT}/install_debug.log"
 PYTHON="${VENV_DIR}/bin/python"
 PIP="${PYTHON} -m pip"
+MAINT_DB="postgres"
 
 ask() {
   prompt="$1"; def="$2"
@@ -164,11 +165,9 @@ if command -v psql >/dev/null 2>&1; then
   if [ "${pg_started}" -eq 1 ] && { [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; }; then
     # Şifre içinde tek tırnakları kaç
     esc_pw=$(printf "%s" "${DB_PASSWORD}" | sed "s/'/''/g")
-    PSQL_CMD="psql"
+    PSQL_CMD="psql -d ${MAINT_DB}"
     if command -v sudo >/dev/null 2>&1 && sudo -u postgres true 2>/dev/null; then
-      PSQL_CMD="sudo -u postgres psql"
-    elif id postgres >/dev/null 2>&1; then
-      PSQL_CMD="su - postgres -c psql"
+      PSQL_CMD="sudo -u postgres psql -d ${MAINT_DB}"
     fi
     # psql erişimi yoksa atla
     if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -c '\q' >/dev/null 2>&1; then
