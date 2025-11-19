@@ -71,6 +71,12 @@ debug_step() {
   echo "DEBUG_STEP: ${step}" | tee -a "${DEBUG_LOG}" || true
 }
 
+debug_db() {
+  msg="$1"
+  mkdir -p "$(dirname "${DEBUG_LOG}")" 2>/dev/null || true
+  echo "DB_DEBUG: ${msg}" | tee -a "${DEBUG_LOG}" || true
+}
+
 ensure_pg_running() {
   if command -v systemctl >/dev/null 2>&1; then
     systemctl is-active --quiet postgresql || systemctl start postgresql || return 1
@@ -162,6 +168,7 @@ if command -v psql >/dev/null 2>&1; then
   else
     create_db_ans="h"
   fi
+  debug_db "İstenen DB bilgileri: name=${DB_NAME}, user=${DB_USER}, host=${DB_HOST}, port=${DB_PORT}"
   if [ "${pg_started}" -eq 1 ] && { [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; }; then
     # Şifre içinde tek tırnakları kaç
     esc_pw=$(printf "%s" "${DB_PASSWORD}" | sed "s/'/''/g")
@@ -175,13 +182,19 @@ if command -v psql >/dev/null 2>&1; then
     else
       create_db_ok=1
       # rol oluştur (yoksa)
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" >/dev/null 2>&1 || \
+      debug_db "Komut: ${PSQL_CMD} -Atc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\""
+      if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" >/dev/null 2>&1; then
+        debug_db "Komut: ${PSQL_CMD} -c \"CREATE ROLE \\\"${DB_USER}\\\" LOGIN PASSWORD '***'\""
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || echo "Uyarı: rol oluşturulamadı."
+      fi
       # veritabanı oluştur (yoksa)
+      debug_db "Komut: ${PSQL_CMD} -Atc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'\""
       if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" >/dev/null 2>&1; then
+        debug_db "Komut: ${PSQL_CMD} -c \"CREATE DATABASE \\\"${DB_NAME}\\\" OWNER \\\"${DB_USER}\\\"\""
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || create_db_ok=0
       fi
       if [ "${create_db_ok}" -eq 1 ]; then
+        debug_db "Komut: ${PSQL_CMD} -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"${DB_NAME}\\\" TO \\\"${DB_USER}\\\"\""
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_NAME}\" TO \"${DB_USER}\"" || echo "Uyarı: yetki verilemedi."
       else
         echo "Uyarı: veritabanı oluşturulamadı, yetki verme atlandı. psql ile elle kontrol edin."
