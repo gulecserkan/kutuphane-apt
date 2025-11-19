@@ -106,8 +106,8 @@ PY
   SU_EMAIL_DEF="admin@example.com"
   SU_PASS_DEF="degistirin"
 
-  DB_NAME=$(ask "DB adı" "$DB_NAME_DEF")
-  DB_USER=$(ask "DB kullanıcı" "$DB_USER_DEF")
+  DB_NAME=$(ask "DB adı (küçük harf önerilir)" "$DB_NAME_DEF")
+  DB_USER=$(ask "DB kullanıcı (küçük harf önerilir)" "$DB_USER_DEF")
   DB_PASSWORD=$(ask "DB şifre" "$DB_PASS_DEF")
   DB_HOST=$(ask "DB host" "$DB_HOST_DEF")
   DB_PORT=$(ask "DB port" "$DB_PORT_DEF")
@@ -181,15 +181,13 @@ if command -v psql >/dev/null 2>&1; then
       echo "Uyarı: postgres yetkisi yok veya psql bağlantısı kurulamadı, DB/rol oluşturma atlandı."
     else
       create_db_ok=1
-      # rol oluştur (yoksa)
-      debug_db "Komut: ${PSQL_CMD} -Atc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\""
-      if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" >/dev/null 2>&1; then
-        debug_db "Komut: ${PSQL_CMD} -c \"CREATE ROLE \\\"${DB_USER}\\\" LOGIN PASSWORD '***'\""
-        ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || echo "Uyarı: rol oluşturulamadı."
-      fi
-      # veritabanı oluştur (yoksa)
-      debug_db "Komut: ${PSQL_CMD} -Atc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'\""
-      if ! ${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" >/dev/null 2>&1; then
+      debug_db "Komut: ${PSQL_CMD} -c \"DROP DATABASE IF EXISTS \\\"${DB_NAME}\\\"\""
+      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"${DB_NAME}\"" || true
+      debug_db "Komut: ${PSQL_CMD} -c \"DROP ROLE IF EXISTS \\\"${DB_USER}\\\"\""
+      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP ROLE IF EXISTS \"${DB_USER}\"" || true
+      debug_db "Komut: ${PSQL_CMD} -c \"CREATE ROLE \\\"${DB_USER}\\\" LOGIN PASSWORD '***'\""
+      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || create_db_ok=0
+      if [ "${create_db_ok}" -eq 1 ]; then
         debug_db "Komut: ${PSQL_CMD} -c \"CREATE DATABASE \\\"${DB_NAME}\\\" OWNER \\\"${DB_USER}\\\"\""
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || create_db_ok=0
       fi
