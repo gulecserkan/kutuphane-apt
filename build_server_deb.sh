@@ -50,7 +50,6 @@ ENV_FILE="${ENV_DIR}/.env"
 VENV_DIR="${APP_ROOT}/venv"
 REQ_FILE="${APP_ROOT}/requirements.txt"
 SUMMARY_FILE="${APP_ROOT}/INSTALL_SUMMARY.txt"
-DEBUG_LOG="${APP_ROOT}/install_debug.log"
 PYTHON="${VENV_DIR}/bin/python"
 PIP="${PYTHON} -m pip"
 MAINT_DB="postgres"
@@ -65,17 +64,6 @@ ask() {
   fi
 }
 
-debug_step() {
-  step="$1"
-  mkdir -p "$(dirname "${DEBUG_LOG}")" 2>/dev/null || true
-  echo "DEBUG_STEP: ${step}" | tee -a "${DEBUG_LOG}" || true
-}
-
-debug_db() {
-  msg="$1"
-  mkdir -p "$(dirname "${DEBUG_LOG}")" 2>/dev/null || true
-  echo "DB_DEBUG: ${msg}" | tee -a "${DEBUG_LOG}" || true
-}
 
 ensure_pg_running() {
   if command -v systemctl >/dev/null 2>&1; then
@@ -89,7 +77,6 @@ ensure_pg_running() {
 }
 
 mkdir -p "${ENV_DIR}"
-debug_step "start"
 # .env yoksa varsayılan bir tane oluştur
 if [ ! -f "${ENV_FILE}" ]; then
   SECRET_KEY=$(python3 - <<'PY'
@@ -124,7 +111,6 @@ SAMPLE
   chmod 640 "${ENV_FILE}"
   echo ".env oluşturuldu (${ENV_FILE}). DB bilgilerini ve parolaları güncelleyin."
 fi
-debug_step "env_ready"
 
 # .env'yi içe al
 set +e
@@ -147,7 +133,6 @@ if [ -x "${VENV_DIR}/bin/pip" ]; then
 else
   echo "Uyarı: pip bulunamadı (${VENV_DIR}/bin/pip)."
 fi
-debug_step "pip_done"
 
 # PostgreSQL DB/rol oluştur (opsiyonel)
 if command -v psql >/dev/null 2>&1; then
@@ -161,7 +146,6 @@ if command -v psql >/dev/null 2>&1; then
   else
     create_db_ans="h"
   fi
-  debug_db "İstenen DB bilgileri: name=${DB_NAME}, user=${DB_USER}, host=${DB_HOST}, port=${DB_PORT}"
   if [ "${pg_started}" -eq 1 ] && { [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; }; then
     # Şifre içinde tek tırnakları kaç
     esc_pw=$(printf "%s" "${DB_PASSWORD}" | sed "s/'/''/g")
@@ -174,18 +158,13 @@ if command -v psql >/dev/null 2>&1; then
       echo "Uyarı: postgres yetkisi yok veya psql bağlantısı kurulamadı, DB/rol oluşturma atlandı."
     else
       create_db_ok=1
-      debug_db "Komut: ${PSQL_CMD} -c \"DROP DATABASE IF EXISTS \\\"${DB_NAME}\\\"\""
       ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"${DB_NAME}\"" || true
-      debug_db "Komut: ${PSQL_CMD} -c \"DROP ROLE IF EXISTS \\\"${DB_USER}\\\"\""
       ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP ROLE IF EXISTS \"${DB_USER}\"" || true
-      debug_db "Komut: ${PSQL_CMD} -c \"CREATE ROLE \\\"${DB_USER}\\\" LOGIN PASSWORD '***'\""
       ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || create_db_ok=0
       if [ "${create_db_ok}" -eq 1 ]; then
-        debug_db "Komut: ${PSQL_CMD} -c \"CREATE DATABASE \\\"${DB_NAME}\\\" OWNER \\\"${DB_USER}\\\"\""
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || create_db_ok=0
       fi
       if [ "${create_db_ok}" -eq 1 ]; then
-        debug_db "Komut: ${PSQL_CMD} -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"${DB_NAME}\\\" TO \\\"${DB_USER}\\\"\""
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_NAME}\" TO \"${DB_USER}\"" || echo "Uyarı: yetki verilemedi."
       else
         echo "Uyarı: veritabanı oluşturulamadı, yetki verme atlandı. psql ile elle kontrol edin."
@@ -197,7 +176,6 @@ if command -v psql >/dev/null 2>&1; then
 else
   echo "Uyarı: psql bulunamadı, DB/rol otomatik oluşturulmadı."
 fi
-debug_step "db_done"
 
 # migrate
 if [ -f "${APP_ROOT}/manage.py" ]; then
@@ -217,14 +195,12 @@ if [ -f "${APP_ROOT}/manage.py" ]; then
     echo "Not: non-interaktif ortam, createsuperuser atlandı. İhtiyaç varsa manuel çalıştırın."
   fi
 fi
-debug_step "django_done"
 
 # service/cron
 if [ -x "${APP_ROOT}/setup_backend_service.sh" ]; then
   echo "Systemd/cron kurulumu deneniyor..."
   "${APP_ROOT}/setup_backend_service.sh" || echo "setup_backend_service.sh çalıştırılamadı, manuel kurulum yapın."
 fi
-debug_step "service_done"
 cat > "${SUMMARY_FILE}" <<SUM
 Kutuphane Server Kurulum Özeti
 -----------------------------
