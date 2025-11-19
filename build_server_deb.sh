@@ -204,6 +204,11 @@ if [ -f "${APP_ROOT}/manage.py" ]; then
   PY_CMD="${PYTHON}"
   [ -x "${PYTHON}" ] || PY_CMD="python3"
   (cd "${APP_ROOT}" && ${PY_CMD} manage.py migrate --noinput) || echo "Uyarı: migrate çalıştırılamadı, DB bilgilerini kontrol edin."
+  # collectstatic
+  if [ -n "${COLLECT_STATIC:-}" ] || [ -d "${APP_ROOT}/static" ] || [ -d "${APP_ROOT}/staticfiles" ]; then
+    echo "collectstatic çalıştırılıyor..."
+    (cd "${APP_ROOT}" && ${PY_CMD} manage.py collectstatic --noinput) || echo "Uyarı: collectstatic çalıştırılamadı."
+  fi
   # superuser oluştur (interaktif)
   if [ -t 0 ]; then
     echo "Süper kullanıcı oluşturma başlatılıyor (mevcutsa atlanır)."
