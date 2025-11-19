@@ -253,9 +253,16 @@ cat > "${CONTROL_DIR}/postrm" <<'EOF'
 set -e
 APP_ROOT="/opt/kutuphane-server"
 ENV_DIR="/etc/kutuphane"
+SERVICE_NAME="kutuphane-backend"
+CRON_FILE="/etc/cron.d/kutuphane-scheduler"
 
 case "$1" in
   remove|purge)
+    systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+    systemctl disable "${SERVICE_NAME}" 2>/dev/null || true
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    systemctl daemon-reload || true
+    rm -f "${CRON_FILE}"
     rm -rf "${APP_ROOT}"
     if [ "$1" = "purge" ]; then
       rm -rf "${ENV_DIR}"
