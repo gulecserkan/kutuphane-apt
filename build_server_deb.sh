@@ -210,7 +210,11 @@ fi
 # service/cron
 if [ -x "${APP_ROOT}/setup_backend_service.sh" ]; then
   echo "Systemd/cron kurulumu deneniyor..."
-  "${APP_ROOT}/setup_backend_service.sh" || echo "setup_backend_service.sh çalıştırılamadı, manuel kurulum yapın."
+  SETUP_OUTPUT="$(${APP_ROOT}/setup_backend_service.sh 2>&1)" || {
+    echo "setup_backend_service.sh çalıştırılamadı. Çıktı:"
+    echo "${SETUP_OUTPUT}"
+    echo "Manuel çalıştırmak için: cd ${APP_ROOT} && sudo bash setup_backend_service.sh"
+  }
 fi
 cat > "${SUMMARY_FILE}" <<SUM
 Kutuphane Server Kurulum Özeti
