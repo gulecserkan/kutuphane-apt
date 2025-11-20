@@ -53,6 +53,7 @@ SUMMARY_FILE="${APP_ROOT}/INSTALL_SUMMARY.txt"
 PYTHON="${VENV_DIR}/bin/python"
 PIP="${PYTHON} -m pip"
 MAINT_DB="postgres"
+LOG_FILE="${APP_ROOT}/install.log"
 
 ask() {
   prompt="$1"; def="$2"
@@ -77,6 +78,7 @@ ensure_pg_running() {
 }
 
 mkdir -p "${ENV_DIR}"
+: > "${LOG_FILE}"
 # .env yoksa varsayılan bir tane oluştur
 if [ ! -f "${ENV_FILE}" ]; then
   SECRET_KEY=$(python3 - <<'PY'
@@ -121,12 +123,21 @@ set -e
 
 # venv + pip bağımlılık kurulumu
 if [ ! -d "${VENV_DIR}" ]; then
-  python3 -m venv "${VENV_DIR}" || echo "Uyarı: venv oluşturulamadı (${VENV_DIR}). python3-venv var mı kontrol edin."
+  if ! python3 -m venv "${VENV_DIR}" >>"${LOG_FILE}" 2>&1; then
+    echo "Hata: venv oluşturulamadı (${VENV_DIR}). Ayrıntılar: ${LOG_FILE}" >&2
+    exit 1
+  fi
 fi
 if [ -x "${VENV_DIR}/bin/pip" ]; then
-  ${PIP} install --upgrade pip wheel setuptools || echo "Uyarı: pip yükseltilemedi."
+  if ! ${PIP} install --upgrade pip wheel setuptools >>"${LOG_FILE}" 2>&1; then
+    echo "Hata: pip yükseltme başarısız. Ayrıntılar: ${LOG_FILE}" >&2
+    exit 1
+  fi
   if [ -f "${REQ_FILE}" ]; then
-    ${PIP} install --no-cache-dir -r "${REQ_FILE}" || echo "Uyarı: requirements.txt kurulamadı."
+    if ! ${PIP} install --no-cache-dir -r "${REQ_FILE}" >>"${LOG_FILE}" 2>&1; then
+      echo "Hata: requirements.txt kurulamadı. Ayrıntılar: ${LOG_FILE}" >&2
+      exit 1
+    fi
   else
     echo "Uyarı: requirements.txt bulunamadı, pip kurulumu atlandı."
   fi
