@@ -26,6 +26,9 @@ rsync -a --delete \
   --exclude "*.pyc" \
   --exclude "kutuphane_desktop" \
   "${SERVER_ROOT}/" "${PREFIX}/"
+if [ -f "${PREFIX}/setup_backend_service.sh" ]; then
+  chmod 755 "${PREFIX}/setup_backend_service.sh" || true
+fi
 
 # Paket içine VERSION dosyası bırak
 echo "${VERSION}" > "${PREFIX}/VERSION"
