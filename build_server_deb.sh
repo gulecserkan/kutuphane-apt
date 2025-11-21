@@ -47,6 +47,28 @@ EOF
 cat > "${CONTROL_DIR}/postinst" <<'EOF'
 #!/bin/sh
 set -e
+detect_user() {
+  if [ -n "${SERVICE_USER_OVERRIDE:-}" ]; then
+    echo "${SERVICE_USER_OVERRIDE}"
+    return
+  fi
+  if [ -n "${SUDO_USER:-}" ]; then
+    echo "${SUDO_USER}"
+    return
+  fi
+  owner=$(stat -c '%U' "/opt/kutuphane-server" 2>/dev/null || true)
+  if [ -n "${owner}" ] && [ "${owner}" != "root" ]; then
+    echo "${owner}"
+    return
+  fi
+  fallback=$(getent passwd 1000 2>/dev/null | cut -d: -f1)
+  if [ -n "${fallback}" ]; then
+    echo "${fallback}"
+    return
+  fi
+  echo "root"
+}
+
 APP_ROOT="/opt/kutuphane-server"
 ENV_DIR="/etc/kutuphane"
 ENV_FILE="${ENV_DIR}/.env"
@@ -57,6 +79,7 @@ PYTHON="${VENV_DIR}/bin/python"
 PIP="${PYTHON} -m pip"
 MAINT_DB="postgres"
 LOG_FILE="${APP_ROOT}/install.log"
+SERVICE_USER=$(detect_user)
 
 ask() {
   prompt="$1"; def="$2"
@@ -113,6 +136,7 @@ DB_PASSWORD=${DB_PASSWORD}
 DB_HOST=${DB_HOST}
 DB_PORT=${DB_PORT}
 SAMPLE
+  chown "${SERVICE_USER}:${SERVICE_USER}" "${ENV_FILE}" 2>/dev/null || true
   chmod 640 "${ENV_FILE}"
   echo ".env oluşturuldu (${ENV_FILE}). DB bilgilerini ve parolaları güncelleyin."
 fi
