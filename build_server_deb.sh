@@ -241,6 +241,12 @@ if [ -x "${APP_ROOT}/setup_backend_service.sh" ]; then
     echo "Manuel çalıştırmak için: cd ${APP_ROOT} && sudo bash setup_backend_service.sh"
   }
 fi
+# Servis varsa restart et
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl list-unit-files | grep -q "kutuphane-backend.service"; then
+    systemctl restart kutuphane-backend || echo "Uyarı: kutuphane-backend restart edilemedi."
+  fi
+fi
 cat > "${SUMMARY_FILE}" <<SUM
 Kutuphane Server Kurulum Özeti
 -----------------------------
