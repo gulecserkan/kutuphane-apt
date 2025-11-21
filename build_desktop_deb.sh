@@ -82,6 +82,21 @@ exit 0
 EOF
 chmod 755 "${CONTROL_DIR}/postinst"
 
+cat > "${CONTROL_DIR}/postrm" <<'EOF'
+#!/bin/sh
+set -e
+APP_NAME="kutuphane"
+target_user="${SUDO_USER:-$(logname 2>/dev/null || echo "$USER")}"
+target_home="$(eval echo "~${target_user}")"
+DESKTOP_FILE="${target_home}/.local/share/applications/${APP_NAME}.desktop"
+EXEC_WRAPPER="${target_home}/.local/bin/${APP_NAME}"
+ICON_FILE="${target_home}/.local/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
+
+rm -f "${DESKTOP_FILE}" "${EXEC_WRAPPER}" "${ICON_FILE}"
+exit 0
+EOF
+chmod 755 "${CONTROL_DIR}/postrm"
+
 if [ -f "${ICON_SRC}" ]; then
   mkdir -p "${BUILD_DIR}/usr/share/icons/hicolor/256x256/apps"
   install -m 644 "${ICON_SRC}" "${BUILD_DIR}/usr/share/icons/hicolor/256x256/apps/${APP_NAME}.png"
