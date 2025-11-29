@@ -219,10 +219,14 @@ if command -v psql >/dev/null 2>&1; then
       # Collation sürümü uyarılarını azaltmak için template veritabanlarını tazele
       ${PSQL_CMD} -c "ALTER DATABASE template1 REFRESH COLLATION VERSION" || true
       ${PSQL_CMD} -c "ALTER DATABASE postgres REFRESH COLLATION VERSION" || true
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"${DB_NAME}\"" || true
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP ROLE IF EXISTS \"${DB_USER}\"" || true
-      ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || create_db_ok=0
-      if [ "${create_db_ok}" -eq 1 ]; then
+      role_exists=$(${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" 2>/dev/null || echo "err")
+      if [ "${role_exists}" != "1" ]; then
+        ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || create_db_ok=0
+      else
+        ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "ALTER ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || true
+      fi
+      db_exists=$(${PSQL_CMD} -v ON_ERROR_STOP=1 -Atc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" 2>/dev/null || echo "err")
+      if [ "${db_exists}" != "1" ]; then
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER}\"" || create_db_ok=0
       fi
       if [ "${create_db_ok}" -eq 1 ]; then
@@ -251,19 +255,23 @@ if [ -f "${APP_ROOT}/manage.py" ]; then
   if [ -t 0 ]; then
     echo "Süper kullanıcı kontrol ediliyor..."
     set +e
-    if (cd "${APP_ROOT}" && ${PY_CMD} manage.py shell <<'PY'
+    (cd "${APP_ROOT}" && ${PY_CMD} manage.py shell <<'PY'
 from django.contrib.auth import get_user_model
 User = get_user_model()
 import sys
 sys.exit(0 if User.objects.filter(is_superuser=True).exists() else 1)
 PY
-    ); then
+    )
+    status=$?
+    set -e
+    if [ "${status}" -eq 0 ]; then
       echo "Süper kullanıcı zaten mevcut, atlandı."
-    else
+    elif [ "${status}" -eq 1 ]; then
       echo "Süper kullanıcı oluşturma başlatılıyor."
       (cd "${APP_ROOT}" && DJANGO_SUPERUSER_PASSWORD= ${PY_CMD} manage.py createsuperuser) || echo "Uyarı: createsuperuser çalıştırılamadı."
+    else
+      echo "Uyarı: Süper kullanıcı kontrolü başarısız oldu (DB bağlantısı?). Manuel kontrol edin."
     fi
-    set -e
   else
     echo "Not: non-interaktif ortam, createsuperuser atlandı. İhtiyaç varsa manuel çalıştırın."
   fi
