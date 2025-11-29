@@ -1,13 +1,13 @@
 Package: kutuphane-desktop
-Version: 1.0.12
+Version: 1.0.13
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
 Depends: python3, python3-venv, python3-pip, python3-pyqt5
-Filename: pool/main/kutuphane-desktop_1.0.12.deb
-Size: 16285184
-MD5sum: 17c128dde291867f8d80f1c00b5b124e
-SHA1: 32a1a7fc970acde8b2b7912aed3161df63f27306
-SHA256: a12228a933f1e277c4721be572c3dfd60a28fb07fc7d26884440568e1281861f
+Filename: pool/main/kutuphane-desktop_1.0.13.deb
+Size: 16285840
+MD5sum: 74bdd82395f93a90d90332cde3116bce
+SHA1: a1e0b29f45206420afe24977e7f77aee8cbcd5c6
+SHA256: 6af500f8385976d37ebaaa2beab99d929b3e8eb6f2db442e70ca22071ff77a1c
 Section: utils
 Priority: optional
 Description: Okul kütüphanesi masaüstü istemcisi
