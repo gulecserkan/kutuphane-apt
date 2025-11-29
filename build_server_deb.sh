@@ -172,6 +172,26 @@ else
   echo "Uyarı: pip bulunamadı (${VENV_DIR}/bin/pip)."
 fi
 
+# PostgreSQL cluster durumu
+if command -v pg_lsclusters >/dev/null 2>&1; then
+  cluster_ok=1
+  running_cnt=$(pg_lsclusters 2>/dev/null | awk 'NR>1 && ($4=="online" || $4=="running"){c++} END{print c+0}')
+  if [ "${running_cnt}" -eq 0 ]; then
+    first=$(pg_lsclusters 2>/dev/null | awk 'NR==2{print $1" "$2}')
+    if [ -n "${first}" ] && command -v pg_ctlcluster >/dev/null 2>&1; then
+      ver=$(echo "${first}" | awk '{print $1}')
+      name=$(echo "${first}" | awk '{print $2}')
+      pg_ctlcluster "${ver}" "${name}" start || cluster_ok=0
+    else
+      cluster_ok=0
+    fi
+  fi
+  if [ "${cluster_ok}" -eq 0 ]; then
+    echo "Hata: Çalışan PostgreSQL cluster bulunamadı. pg_ctlcluster ile başlatın ve yeniden deneyin." >&2
+    exit 1
+  fi
+fi
+
 # PostgreSQL DB/rol oluştur (opsiyonel)
 if command -v psql >/dev/null 2>&1; then
   pg_started=1
@@ -196,6 +216,9 @@ if command -v psql >/dev/null 2>&1; then
       echo "Uyarı: postgres yetkisi yok veya psql bağlantısı kurulamadı, DB/rol oluşturma atlandı."
     else
       create_db_ok=1
+      # Collation sürümü uyarılarını azaltmak için template veritabanlarını tazele
+      ${PSQL_CMD} -c "ALTER DATABASE template1 REFRESH COLLATION VERSION" || true
+      ${PSQL_CMD} -c "ALTER DATABASE postgres REFRESH COLLATION VERSION" || true
       ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"${DB_NAME}\"" || true
       ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "DROP ROLE IF EXISTS \"${DB_USER}\"" || true
       ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "CREATE ROLE \"${DB_USER}\" LOGIN PASSWORD '${esc_pw}'" || create_db_ok=0
@@ -205,7 +228,8 @@ if command -v psql >/dev/null 2>&1; then
       if [ "${create_db_ok}" -eq 1 ]; then
         ${PSQL_CMD} -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE \"${DB_NAME}\" TO \"${DB_USER}\"" || echo "Uyarı: yetki verilemedi."
       else
-        echo "Uyarı: veritabanı oluşturulamadı, yetki verme atlandı. psql ile elle kontrol edin."
+        echo "Hata: veritabanı oluşturulamadı, yetki verme atlandı. psql ile elle kontrol edin."
+        exit 1
       fi
     fi
   elif [ "${create_db_ans}" = "E" ] || [ "${create_db_ans}" = "e" ]; then
@@ -225,8 +249,21 @@ if [ -f "${APP_ROOT}/manage.py" ]; then
   (cd "${APP_ROOT}" && ${PY_CMD} manage.py collectstatic --noinput) || echo "Uyarı: collectstatic çalıştırılamadı."
   # superuser oluştur (interaktif)
   if [ -t 0 ]; then
-    echo "Süper kullanıcı oluşturma başlatılıyor (mevcutsa atlanır)."
-    (cd "${APP_ROOT}" && DJANGO_SUPERUSER_PASSWORD= ${PY_CMD} manage.py createsuperuser) || echo "Uyarı: createsuperuser çalıştırılamadı."
+    echo "Süper kullanıcı kontrol ediliyor..."
+    set +e
+    if (cd "${APP_ROOT}" && ${PY_CMD} manage.py shell <<'PY'
+from django.contrib.auth import get_user_model
+User = get_user_model()
+import sys
+sys.exit(0 if User.objects.filter(is_superuser=True).exists() else 1)
+PY
+    ); then
+      echo "Süper kullanıcı zaten mevcut, atlandı."
+    else
+      echo "Süper kullanıcı oluşturma başlatılıyor."
+      (cd "${APP_ROOT}" && DJANGO_SUPERUSER_PASSWORD= ${PY_CMD} manage.py createsuperuser) || echo "Uyarı: createsuperuser çalıştırılamadı."
+    fi
+    set -e
   else
     echo "Not: non-interaktif ortam, createsuperuser atlandı. İhtiyaç varsa manuel çalıştırın."
   fi
