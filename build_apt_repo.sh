@@ -12,6 +12,8 @@ DIST_DIR="${ROOT}/dist"
 REPO_DIR="${APT_REPO_DIR:-${ROOT}/apt-repo}"
 POOL_DIR="${REPO_DIR}/pool/main"
 PACKAGES_DIR="${REPO_DIR}/dists/stable/main/binary-amd64"
+I18N_DIR="${REPO_DIR}/dists/stable/main/i18n"
+CONTENTS_DIR="${REPO_DIR}/dists/stable/main"
 
 if ! command -v dpkg-scanpackages >/dev/null 2>&1; then
   echo "dpkg-scanpackages yok. 'sudo apt install dpkg-dev' ile kurun." >&2
@@ -24,7 +26,7 @@ if [ -d "${REPO_DIR}/.git" ]; then
 else
   rm -rf "${REPO_DIR}"
 fi
-mkdir -p "${POOL_DIR}" "${PACKAGES_DIR}"
+mkdir -p "${POOL_DIR}" "${PACKAGES_DIR}" "${I18N_DIR}"
 
 echo "• .deb dosyaları kopyalanıyor..."
 shopt -s nullglob
@@ -43,6 +45,29 @@ fi
 echo "• Packages dosyası üretiliyor..."
 (cd "${REPO_DIR}" && dpkg-scanpackages "pool/main" /dev/null > "dists/stable/main/binary-amd64/Packages")
 gzip -kf "${PACKAGES_DIR}/Packages"
+
+# Boş Translation/Contents dosyaları oluştur (apt update gürültüsünü azaltmak için)
+touch "${I18N_DIR}/Translation-en" "${I18N_DIR}/Translation-tr" "${I18N_DIR}/Translation-tr_TR"
+touch "${CONTENTS_DIR}/Contents-amd64" "${CONTENTS_DIR}/Contents-all"
+gzip -kf "${I18N_DIR}/Translation-en" "${I18N_DIR}/Translation-tr" "${I18N_DIR}/Translation-tr_TR" || true
+gzip -kf "${CONTENTS_DIR}/Contents-amd64" "${CONTENTS_DIR}/Contents-all" || true
+
+# Release dosyası üret
+if command -v apt-ftparchive >/dev/null 2>&1; then
+  echo "• Release dosyası üretiliyor..."
+  (cd "${REPO_DIR}" && apt-ftparchive release dists/stable > dists/stable/Release)
+else
+  cat > "${REPO_DIR}/dists/stable/Release" <<REL
+Origin: kutuphane
+Label: kutuphane
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: Basit kutuphane apt deposu
+REL
+  echo "Uyarı: apt-ftparchive yok, Release dosyası basit üretildi." >&2
+fi
 
 cat > "${REPO_DIR}/README.txt" <<EOF
 Bu dizin basit bir apt deposudur.
