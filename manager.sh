@@ -35,12 +35,23 @@ run_build_server() {
   src_def_raw=$(get_default SERVER_SRC || echo "/path/to/server")
   src_def=$(decode_path "$src_def_raw")
   ver_def=$(get_default SERVER_VER || echo "1.0.0")
+   risk_def=$(get_default SERVER_RISK || echo "h")
   src=$(ask "Server kaynak dizini" "$src_def")
   src=$(decode_path "$src")
   ver=$(ask "Server version" "$ver_def")
+  risk_ans=$(ask "Bu sürümde veritabanı şemasını kıran değişiklik var mı? (E dersen kurulumda migrate'den önce 'Lütfen pg_dump ile DB yedeği alın' uyarısı çıkacak)" "$risk_def")
+  risk_flag="h"
+  if [ "${risk_ans}" = "e" ] || [ "${risk_ans}" = "E" ]; then
+    risk_flag="e"
+  fi
   set_default SERVER_SRC "$src"
   set_default SERVER_VER "$ver"
-  OUTPUT_BASE="${SCRIPT_DIR}" VERSION="$ver" "$BUILD_SERVER" "$src"
+  set_default SERVER_RISK "$risk_flag"
+  if [ "$risk_flag" = "e" ]; then
+    OUTPUT_BASE="${SCRIPT_DIR}" VERSION="$ver" RISK_MIGRATION_VERSIONS="$ver" "$BUILD_SERVER" "$src"
+  else
+    OUTPUT_BASE="${SCRIPT_DIR}" VERSION="$ver" "$BUILD_SERVER" "$src"
+  fi
 }
 
 run_build_desktop() {

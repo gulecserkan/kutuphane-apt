@@ -8,7 +8,20 @@ fi
 
 SERVER_ROOT="$(cd "$1" && pwd)"
 APP_NAME="kutuphane-server"
-VERSION="${2:-${VERSION:-0.1.0}}"
+# Versiyon kaynağı öncelik sırası:
+# 1) Komut satırı argümanı
+# 2) VERSION ortam değişkeni
+# 3) Proje kökündeki VERSION dosyası
+# 4) Varsayılan "0.1.0"
+if [ -n "${2:-}" ]; then
+  VERSION="${2}"
+elif [ -n "${VERSION:-}" ]; then
+  VERSION="${VERSION}"
+elif [ -f "${SERVER_ROOT}/VERSION" ]; then
+  VERSION="$(sed -n '1p' "${SERVER_ROOT}/VERSION" | tr -d '\r\n' || echo "0.1.0")"
+else
+  VERSION="0.1.0"
+fi
 OUTPUT_BASE="${OUTPUT_BASE:-$(pwd)}"
 BUILD_DIR="${OUTPUT_BASE}/.build/${APP_NAME}_${VERSION}"
 DIST_DIR="${OUTPUT_BASE}/dist"
@@ -33,6 +46,149 @@ fi
 # Paket içine VERSION dosyası bırak
 echo "${VERSION}" > "${PREFIX}/VERSION"
 
+# Kurulum sonrası teşhis aracı (flutter doctor benzeri)
+cat > "${PREFIX}/kutuphane-doctor.sh" <<'EOF'
+#!/usr/bin/env bash
+set -e
+APP_ROOT="/opt/kutuphane-server"
+ENV_DIR="/etc/kutuphane"
+ENV_FILE="${ENV_DIR}/.env"
+VENV_DIR="${APP_ROOT}/venv"
+PY="${VENV_DIR}/bin/python"
+SERVICE_NAME="kutuphane-backend"
+
+echo "Kutuphane Server Durum Raporu"
+echo "============================="
+echo
+
+echo "1) Sürüm ve dosya yapısı"
+if [ -f "${APP_ROOT}/VERSION" ]; then
+  echo "- Uygulama sürümü: $(cat "${APP_ROOT}/VERSION" 2>/dev/null)"
+else
+  echo "- Uygulama sürümü: VERSION dosyası bulunamadı (${APP_ROOT}/VERSION)."
+fi
+echo "- Kurulum dizini: ${APP_ROOT}"
+echo "- Sanal ortam   : ${VENV_DIR} ($( [ -d "${VENV_DIR}" ] && echo "var" || echo "YOK" ))"
+echo
+
+echo "2) Python ve Django"
+if [ -x "${PY}" ]; then
+  echo "- Python yolu   : ${PY}"
+  "${PY}" -c "import sys; print(f'- Python sürümü : {sys.version.split()[0]}')" || echo "- Python versiyonu okunamadı."
+  "${PY}" -c "import django; print(f'- Django sürümü : {django.get_version()}')" 2>/dev/null || echo "- Django import edilemedi (venv içinde kurulu mu?)."
+else
+  echo "- Sanal ortam Python çalıştırılabilir değil (${PY})."
+fi
+echo
+
+echo "3) Ortam değişkenleri (.env)"
+if [ -f "${ENV_FILE}" ]; then
+  echo "- .env bulundu : ${ENV_FILE}"
+  DB_NAME=$(grep '^DB_NAME=' "${ENV_FILE}" 2>/dev/null | head -n1 | cut -d= -f2-)
+  DB_USER=$(grep '^DB_USER=' "${ENV_FILE}" 2>/dev/null | head -n1 | cut -d= -f2-)
+  DB_HOST=$(grep '^DB_HOST=' "${ENV_FILE}" 2>/dev/null | head -n1 | cut -d= -f2-)
+  DB_PORT=$(grep '^DB_PORT=' "${ENV_FILE}" 2>/dev/null | head -n1 | cut -d= -f2-)
+  echo "- DB_NAME=${DB_NAME:-(tanımsız)}"
+  echo "- DB_USER=${DB_USER:-(tanımsız)}"
+  echo "- DB_HOST=${DB_HOST:-(tanımsız)}"
+  echo "- DB_PORT=${DB_PORT:-(tanımsız)}"
+else
+  echo "- .env bulunamadı (${ENV_FILE})."
+fi
+echo
+
+echo "4) PostgreSQL bağlantısı"
+if command -v psql >/dev/null 2>&1; then
+  if [ -n "${DB_NAME:-}" ] && [ -n "${DB_USER:-}" ]; then
+    echo "- Veritabanı var mı kontrol ediliyor..."
+    if sudo -u postgres psql -Atqc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" 2>/dev/null | grep -q "^1$"; then
+      echo "  • DB '${DB_NAME}' mevcut."
+    else
+      echo "  • DB '${DB_NAME}' BULUNAMADI."
+    fi
+    echo "- Kullanıcı yetkileri kontrol ediliyor..."
+    sudo -u postgres psql -d "${DB_NAME}" -c "\du ${DB_USER}" >/dev/null 2>&1 \
+      && echo "  • Kullanıcı '${DB_USER}' veritabanına erişebiliyor." \
+      || echo "  • Kullanıcı '${DB_USER}' için erişim hatası."
+  else
+    echo "- DB_NAME / DB_USER .env içinde tanımlı değil; DB bağlantısı test edilmedi."
+  fi
+else
+  echo "- psql komutu bulunamadı; PostgreSQL kontrolü atlandı."
+fi
+echo
+
+echo "5) Django check / migrate durumu"
+if [ -x "${PY}" ] && [ -f "${APP_ROOT}/manage.py" ]; then
+  echo "- manage.py check çalıştırılıyor..."
+  (cd "${APP_ROOT}" && "${PY}" manage.py check) >/dev/null 2>&1 \
+    && echo "  • Django check: OK" \
+    || echo "  • Django check: HATA (detay için elle çalıştırın: cd ${APP_ROOT} && ${PY} manage.py check)"
+  echo "- Migrasyon durumu (özet)..."
+  (cd "${APP_ROOT}" && "${PY}" manage.py showmigrations --plan | tail -n 5) 2>/dev/null || echo "  • showmigrations çalıştırılamadı."
+else
+  echo "- manage.py veya venv Python bulunamadı; Django testleri atlandı."
+fi
+echo
+
+echo "6) Statik dosyalar ve medya"
+STATIC_DIR="${APP_ROOT}/staticfiles"
+MEDIA_DIR="${APP_ROOT}/media"
+if [ -d "${STATIC_DIR}" ]; then
+  echo "- Statik dosya dizini var: ${STATIC_DIR}"
+else
+  echo "- Statik dosya dizini YOK: ${STATIC_DIR} (collectstatic çalışmış mı?)."
+fi
+if [ -d "${MEDIA_DIR}" ]; then
+  echo "- Medya dizini: ${MEDIA_DIR}"
+fi
+echo
+
+echo "7) Servis durumu (systemd)"
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl list-unit-files | grep -q "${SERVICE_NAME}.service"; then
+    systemctl is-enabled "${SERVICE_NAME}" >/dev/null 2>&1 \
+      && echo "- Servis enable: Evet (${SERVICE_NAME})" \
+      || echo "- Servis enable: Hayır (${SERVICE_NAME})"
+    systemctl is-active "${SERVICE_NAME}" >/dev/null 2>&1 \
+      && echo "- Servis aktif : ÇALIŞIYOR" \
+      || echo "- Servis aktif : ÇALIŞMIYOR"
+  else
+    echo "- Systemd servisi kayıtlı değil: ${SERVICE_NAME}.service"
+  fi
+else
+  echo "- systemctl bulunamadı; servis durumu kontrol edilmedi."
+fi
+echo
+
+echo "9) Zamanlanmış görevler (cron)"
+CRON_FILE="/etc/cron.d/kutuphane-scheduler"
+if [ -f "${CRON_FILE}" ]; then
+  echo "- Cron dosyası: ${CRON_FILE}"
+  echo "- Görev: Django 'run_scheduled_tasks' komutu ile zamanlanmış görevleri (hatırlatmalar, temizlik vb.) çalıştırır."
+  echo "- Sıklık: Her 15 dakikada bir (*/15 * * * *)."
+  echo "  İçerik:"
+  sed 's/^/    /' "${CRON_FILE}" || true
+  LOG_DIR="/var/log/kutuphane"
+  if [ -f "${LOG_DIR}/scheduler.log" ]; then
+    echo "- Son cron log satırları (${LOG_DIR}/scheduler.log):"
+    tail -n 5 "${LOG_DIR}/scheduler.log" 2>/dev/null | sed 's/^/    /' || echo "    (okunamadı)"
+  else
+    echo "- scheduler.log bulunamadı (${LOG_DIR}/scheduler.log)."
+  fi
+else
+  echo "- Cron girdisi bulunamadı (/etc/cron.d/kutuphane-scheduler)."
+fi
+echo
+
+echo "8) Özet"
+echo "- Ayrıntılı kurulum özeti: ${APP_ROOT}/INSTALL_SUMMARY.txt"
+echo "- Sunucu kurulum dokümanı: ${APP_ROOT}/SERVER_SETUP.md"
+echo
+echo "Rapor tamamlandı."
+EOF
+chmod 755 "${PREFIX}/kutuphane-doctor.sh"
+
 cat > "${CONTROL_DIR}/control" <<EOF
 Package: ${APP_NAME}
 Version: ${VERSION}
@@ -47,6 +203,14 @@ EOF
 cat > "${CONTROL_DIR}/postinst" <<'EOF'
 #!/bin/sh
 set -e
+# postinst args: $1 = configure, $2 = previously-configured version (if any)
+
+# DB şema değişikliklerinde uyarı vereceğimiz sürümler (eşik). Örn: 1.1.0 ve sonrası riskli ise ekleyin.
+RISK_MIGRATION_VERSIONS="1.1.0"
+
+version_ge() { dpkg --compare-versions "$1" ge "$2"; }
+version_lt() { dpkg --compare-versions "$1" lt "$2"; }
+
 detect_user() {
   if [ -n "${SERVICE_USER_OVERRIDE:-}" ]; then
     echo "${SERVICE_USER_OVERRIDE}"
@@ -80,6 +244,19 @@ PIP="${PYTHON} -m pip"
 MAINT_DB="postgres"
 LOG_FILE="${APP_ROOT}/install.log"
 SERVICE_USER=$(detect_user)
+PREV_VERSION="$2"
+
+warn_risky_migration() {
+  new_ver="0.0.0"
+  [ -f "${APP_ROOT}/VERSION" ] && new_ver=$(head -n1 "${APP_ROOT}/VERSION" 2>/dev/null | tr -d '\r\n')
+  for risky in ${RISK_MIGRATION_VERSIONS}; do
+    if [ -n "${PREV_VERSION}" ] && version_ge "${new_ver}" "${risky}" && version_lt "${PREV_VERSION}" "${risky}"; then
+      echo "DİKKAT: Bu sürüm (${new_ver}) veritabanı şemasında potansiyel kırıcı değişiklikler içerebilir." >&2
+      echo "Lütfen güncellemeden önce PostgreSQL yedeği almanız önerilir (örn: sudo -u postgres pg_dump -Fc ${DB_NAME:-kutuphane} > yedek.dump)." >&2
+      break
+    fi
+  done
+}
 
 ask() {
   prompt="$1"; def="$2"
@@ -147,6 +324,9 @@ set -a
 . "${ENV_FILE}"
 set +a
 set -e
+
+# Eğer riskli migration eşiği varsa kullanıcıyı bilgilendir
+warn_risky_migration
 
 # venv + pip bağımlılık kurulumu
 if [ ! -d "${VENV_DIR}" ]; then

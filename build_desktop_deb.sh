@@ -4,7 +4,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${1:-${ROOT}}"
 APP_NAME="kutuphane-desktop"
-VERSION="${VERSION:-0.1.0}"
+# Versiyon kaynağı öncelik sırası:
+# 1) VERSION ortam değişkeni
+# 2) Proje kökündeki VERSION dosyası
+# 3) Varsayılan "0.1.0"
+if [ -n "${VERSION:-}" ]; then
+  VERSION="${VERSION}"
+elif [ -f "${SRC_DIR}/VERSION" ]; then
+  VERSION="$(sed -n '1p' "${SRC_DIR}/VERSION" | tr -d '\r\n' || echo "0.1.0")"
+else
+  VERSION="0.1.0"
+fi
 OUTPUT_BASE="${OUTPUT_BASE:-$(pwd)}"
 BUILD_DIR="${OUTPUT_BASE}/.build/${APP_NAME}_${VERSION}"
 DIST_DIR="${OUTPUT_BASE}/dist"
