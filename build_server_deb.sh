@@ -521,5 +521,5 @@ EOF
 chmod 755 "${CONTROL_DIR}/postrm"
 
 echo "Paketleniyor..."
-dpkg-deb --build "${BUILD_DIR}" "${DIST_DIR}/${APP_NAME}_${VERSION}.deb"
+dpkg-deb --build --root-owner-group "${BUILD_DIR}" "${DIST_DIR}/${APP_NAME}_${VERSION}.deb"
 echo "Oluşturuldu: ${DIST_DIR}/${APP_NAME}_${VERSION}.deb"
