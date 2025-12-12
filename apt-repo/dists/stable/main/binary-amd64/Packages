@@ -1,27 +1,27 @@
 Package: kutuphane-desktop
-Version: 1.0.20
+Version: 1.0.21
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
 Depends: python3, python3-venv, python3-pip, python3-pyqt5
-Filename: pool/main/kutuphane-desktop_1.0.20.deb
-Size: 16287028
-MD5sum: 1d49f0d88f76d91b2041ef483743636b
-SHA1: d55a1db9a343747ee14a014ab755b6876ee9930f
-SHA256: 7e70f6f405ec90a3df952e44111d88fc588d9d45c30f9844a873a7a448a89e5c
+Filename: pool/main/kutuphane-desktop_1.0.21.deb
+Size: 16289480
+MD5sum: 6c6a1e42824b391808280815d6ec073e
+SHA1: e376afbfdc14a5507f383e6a58ecf0a0a035a815
+SHA256: 6144050736fd21fd4641f100219a42055cb13e48cb9f90687c4c91f9b7b4cc08
 Section: utils
 Priority: optional
 Description: Okul kütüphanesi masaüstü istemcisi
 
 Package: kutuphane-server
-Version: 1.0.36
+Version: 1.0.37
 Architecture: all
 Maintainer: Kutuphane Dev <dev@example.com>
 Depends: python3, python3-venv, python3-pip, postgresql, postgresql-client
-Filename: pool/main/kutuphane-server_1.0.36.deb
-Size: 947000
-MD5sum: e127cba50e51112a92016d271d293bd8
-SHA1: ba3f6127e44137eecd82b321ec94d09838ba4356
-SHA256: 8995d1d18c41f5c3e471178d50d661750d1e4833c957a7dcf1341c97ba5ec8f4
+Filename: pool/main/kutuphane-server_1.0.37.deb
+Size: 948696
+MD5sum: 429654c2b5b04643acbcdfa5ba093777
+SHA1: f46a53e67f66b041acf8036e487032582e48e4e1
+SHA256: 9bcf6c192b39c6f29bef92468b31cffcea91153a63a0d575514127ca378efac7
 Section: web
 Priority: optional
 Description: Okul kütüphanesi sunucu uygulaması
